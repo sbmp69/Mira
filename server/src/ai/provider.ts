@@ -14,6 +14,15 @@ export interface AIEmbeddingOptions {
   input: string;
 }
 
+export interface AITranscriptionOptions {
+  audioBase64: string; // m4a or mp3 base64
+}
+
+export interface AISpeechOptions {
+  input: string; // Text to synthesize
+  voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+}
+
 export interface AIProvider {
   /**
    * Generates a response based on a chat history.
@@ -27,4 +36,15 @@ export interface AIProvider {
    * Useful for storing memories.
    */
   generateEmbedding(options: AIEmbeddingOptions): Promise<number[]>;
+
+  /**
+   * Transcribes audio base64 to text (Speech to Text)
+   */
+  transcribeAudio(options: AITranscriptionOptions): Promise<string>;
+
+  /**
+   * Generates speech from text (Text to Speech)
+   * Returns base64 mp3 string
+   */
+  generateSpeech(options: AISpeechOptions): Promise<string>;
 }

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
+import { Audio } from 'expo-av';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,6 +12,7 @@ interface Message {
   isUser: boolean;
   timestamp: string;
   imageUri?: string;
+  isAudio?: boolean;
 }
 
 // Hardcoded IDs from the seed for testing
@@ -33,6 +35,8 @@ export default function ChatScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageBase64, setSelectedImageBase64] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const pickImage = async () => {
@@ -75,17 +79,25 @@ export default function ChatScreen() {
 
     try {
       // Send to Backend (we will update the API service to handle imageToSend later)
-      const response = await chatApi.sendMessage(TEST_USER_ID, TEST_COMPANION_ID, userMessage.text, imageToSend || undefined);
+        const response = await chatApi.sendMessage(TEST_USER_ID, TEST_COMPANION_ID, userMessage.text, imageToSend || undefined);
       
-      const aiMessage: Message = {
-        id: response.message.id || (Date.now() + 1).toString(),
-        text: response.message.content,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      
-      setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
+        const aiMessage: Message = {
+          id: response.message.id || (Date.now() + 1).toString(),
+          text: response.message.content,
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+
+        // Play audio if received
+        if (response.audioData) {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: response.audioData }
+          );
+          await sound.playAsync();
+        }
+      } catch (error) {
       console.error('Failed to get response:', error);
       // Fallback message
       const errorMsg: Message = {
@@ -96,6 +108,72 @@ export default function ChatScreen() {
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    setRecording(null);
+    setIsRecording(false);
+    
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      if (uri) {
+        // Send a temporary "Voice Message" UI bubble
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          text: '🎤 Voice Message',
+          isUser: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isAudio: true
+        };
+        setMessages(prev => [...prev, userMessage]);
+        setIsTyping(true);
+
+        const FileSystem = await import('expo-file-system');
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        const audioToSend = `data:audio/m4a;base64,${base64}`;
+        
+        // Send to backend (requires API update)
+        const response = await chatApi.sendMessage(TEST_USER_ID, TEST_COMPANION_ID, '', undefined, audioToSend);
+        
+        const aiMessage: Message = {
+          id: response.message.id || (Date.now() + 1).toString(),
+          text: response.message.content,
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, aiMessage]);
+
+        // Play audio if received
+        if (response.audioData) {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: response.audioData }
+          );
+          await sound.playAsync();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to process audio:', error);
       setIsTyping(false);
     }
   };
@@ -136,7 +214,10 @@ export default function ChatScreen() {
                 </View>
               )}
               {msg.text ? (
-                <Text style={msg.isUser ? styles.userMessageText : styles.aiMessageText}>
+                <Text style={[
+                  msg.isUser ? styles.userMessageText : styles.aiMessageText,
+                  msg.isAudio && { fontStyle: 'italic' }
+                ]}>
                   {msg.text}
                 </Text>
               ) : null}
@@ -182,13 +263,22 @@ export default function ChatScreen() {
           />
         </View>
 
-        <TouchableOpacity 
-          style={[styles.sendButton, (!inputText.trim() && !selectedImage) && { opacity: 0.5 }]} 
-          onPress={handleSend}
-          disabled={!inputText.trim() && !selectedImage}
-        >
-          <Ionicons name="send" size={18} color={Colors.background} />
-        </TouchableOpacity>
+        {!inputText.trim() && !selectedImage ? (
+          <TouchableOpacity 
+            style={[styles.sendButton, isRecording && styles.recordingButton]} 
+            onPressIn={startRecording}
+            onPressOut={stopRecording}
+          >
+            <Ionicons name={isRecording ? "mic" : "mic-outline"} size={18} color={Colors.background} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={styles.sendButton} 
+            onPress={handleSend}
+          >
+            <Ionicons name="send" size={18} color={Colors.background} />
+          </TouchableOpacity>
+        )}
       </View>
       </View>
     </KeyboardAvoidingView>
@@ -330,6 +420,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  recordingButton: {
+    backgroundColor: '#ff4444',
+    transform: [{ scale: 1.1 }],
   },
   inputAreaWrapper: {
     backgroundColor: Colors.surface,

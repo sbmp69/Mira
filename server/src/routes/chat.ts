@@ -11,7 +11,18 @@ const memoryService = new MemoryService(aiProvider);
 
 router.post('/send', async (req, res) => {
   try {
-    const { userId, companionId, message, image } = req.body;
+    let { userId, companionId, message, image, audio } = req.body;
+
+    // If audio is provided, transcribe it first
+    if (audio) {
+      try {
+        message = await aiProvider.transcribeAudio({ audioBase64: audio });
+        console.log(`Transcribed audio to: "${message}"`);
+      } catch (err) {
+        console.error('Transcription failed', err);
+        return res.status(400).json({ error: 'Failed to transcribe audio' });
+      }
+    }
 
     // 1. Fetch User and Companion
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -85,7 +96,17 @@ router.post('/send', async (req, res) => {
       }
     });
 
-    res.json({ message: aiMessage });
+    // 9. If the user sent audio, send audio back (TTS)
+    let audioData = null;
+    if (audio) {
+      try {
+        audioData = await aiProvider.generateSpeech({ input: responseContent });
+      } catch (err) {
+        console.error('TTS failed', err);
+      }
+    }
+
+    res.json({ message: aiMessage, audioData });
 
   } catch (error) {
     console.error('Chat error:', error);

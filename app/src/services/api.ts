@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 const BASE_URL = 'https://mira-ruby-six.vercel.app/api';
 
 export const chatApi = {
-  async sendMessage(userId: string, companionId: string, message: string, imageBase64?: string) {
+  async sendMessage(userId: string, companionId: string, message: string, imageBase64?: string, audioBase64?: string) {
     try {
       const response = await fetch(`${BASE_URL}/chat/send`, {
         method: 'POST',
@@ -17,6 +17,7 @@ export const chatApi = {
           companionId,
           message,
           image: imageBase64,
+          audio: audioBase64,
         }),
       });
       
