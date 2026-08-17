@@ -2,7 +2,7 @@
 // Android emulator uses 10.0.2.2 to access localhost, iOS uses localhost
 import { Platform } from 'react-native';
 
-const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api';
+const BASE_URL = 'https://mira-ruby-six.vercel.app/api';
 
 export const chatApi = {
   async sendMessage(userId: string, companionId: string, message: string) {
