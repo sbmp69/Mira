@@ -19,7 +19,7 @@ export class OpenAIProvider implements AIProvider {
         max_tokens: options.maxTokens ?? 500,
       });
 
-      return response.choices[0].message.content || '';
+      return response.choices[0]?.message?.content || '';
     } catch (error) {
       console.error('Error generating chat with OpenAI:', error);
       throw error;
@@ -33,7 +33,7 @@ export class OpenAIProvider implements AIProvider {
         input: options.input,
       });
 
-      return response.data[0].embedding;
+      return response.data[0]?.embedding || [];
     } catch (error) {
       console.error('Error generating embedding with OpenAI:', error);
       throw error;
