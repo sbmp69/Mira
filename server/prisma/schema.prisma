@@ -50,6 +50,7 @@ model Message {
   conversationId String
   sender         String
   content        String
+  image          String?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 }

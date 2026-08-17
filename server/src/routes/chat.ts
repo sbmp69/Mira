@@ -11,7 +11,7 @@ const memoryService = new MemoryService(aiProvider);
 
 router.post('/send', async (req, res) => {
   try {
-    const { userId, companionId, message } = req.body;
+    const { userId, companionId, message, image } = req.body;
 
     // 1. Fetch User and Companion
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -44,7 +44,8 @@ router.post('/send', async (req, res) => {
       data: {
         conversationId: conversation.id,
         sender: 'USER',
-        content: message
+        content: message,
+        image: image || null
       }
     });
 
@@ -57,9 +58,10 @@ router.post('/send', async (req, res) => {
     // 6. Format recent history for the Engine
     const recentHistory = conversation.messages.reverse().map(m => ({
       sender: m.sender,
-      content: m.content
+      content: m.content,
+      imageBase64: m.image || undefined
     }));
-    recentHistory.push({ sender: 'USER', content: message });
+    recentHistory.push({ sender: 'USER', content: message, imageBase64: image || undefined });
 
     // 7. Generate AI Response
     const responseContent = await engine.generateCompanionResponse({

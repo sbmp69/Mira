@@ -8,7 +8,7 @@ interface ChatContext {
   relationshipStage: number; // 1-7
   languagePref: string;
   relevantMemories: string[];
-  recentHistory: { sender: string; content: string }[];
+  recentHistory: { sender: string; content: string; imageBase64?: string }[];
   timeOfDay: string;
 }
 
@@ -24,10 +24,20 @@ export class AIEngine {
 
     // Append recent history
     for (const msg of context.recentHistory) {
-      messages.push({
-        role: msg.sender === 'USER' ? 'user' : 'assistant',
-        content: msg.content
-      });
+      if (msg.imageBase64 && msg.sender === 'USER') {
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: msg.content || "Here's an image for you." },
+            { type: 'image_url', image_url: { url: msg.imageBase64 } }
+          ]
+        });
+      } else {
+        messages.push({
+          role: msg.sender === 'USER' ? 'user' : 'assistant',
+          content: msg.content
+        });
+      }
     }
 
     const response = await this.provider.generateChat({

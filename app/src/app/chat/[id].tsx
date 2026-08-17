@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ interface Message {
   text: string;
   isUser: boolean;
   timestamp: string;
+  imageUri?: string;
 }
 
 // Hardcoded IDs from the seed for testing
@@ -29,26 +30,52 @@ export default function ChatScreen() {
     }
   ]);
   const [inputText, setInputText] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageBase64, setSelectedImageBase64] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  const pickImage = async () => {
+    // Dynamically import to avoid errors if not fully installed yet
+    const ImagePicker = await import('expo-image-picker');
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      // In a real app we'd save the base64 string or upload it.
+      // For UI purposes, we'll keep the URI to display it.
+      setSelectedImage(result.assets[0].uri);
+      if (result.assets[0].base64) {
+        setSelectedImageBase64(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      }
+    }
+  };
+
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !selectedImage) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText.trim(),
       isUser: true,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      imageUri: selectedImage || undefined,
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    const imageToSend = selectedImageBase64;
+    setSelectedImage(null);
+    setSelectedImageBase64(null);
     setIsTyping(true);
 
     try {
-      // Send to Backend
-      const response = await chatApi.sendMessage(TEST_USER_ID, TEST_COMPANION_ID, userMessage.text);
+      // Send to Backend (we will update the API service to handle imageToSend later)
+      const response = await chatApi.sendMessage(TEST_USER_ID, TEST_COMPANION_ID, userMessage.text, imageToSend || undefined);
       
       const aiMessage: Message = {
         id: response.message.id || (Date.now() + 1).toString(),
@@ -102,9 +129,17 @@ export default function ChatScreen() {
         {messages.map((msg) => (
           <View key={msg.id} style={[styles.messageRow, msg.isUser && styles.userMessageRow]}>
             <View style={msg.isUser ? styles.userMessageBubble : styles.aiMessageBubble}>
-              <Text style={msg.isUser ? styles.userMessageText : styles.aiMessageText}>
-                {msg.text}
-              </Text>
+              {msg.imageUri && (
+                <View style={styles.messageImageContainer}>
+                  {/* Dynamic import of Image component to avoid missing import errors */}
+                  <Image source={{ uri: msg.imageUri }} style={styles.messageImage} />
+                </View>
+              )}
+              {msg.text ? (
+                <Text style={msg.isUser ? styles.userMessageText : styles.aiMessageText}>
+                  {msg.text}
+                </Text>
+              ) : null}
               <Text style={[styles.timestamp, msg.isUser && styles.userTimestamp]}>
                 {msg.timestamp}
               </Text>
@@ -122,10 +157,19 @@ export default function ChatScreen() {
       </ScrollView>
 
       {/* Input Area */}
-      <View style={styles.inputArea}>
-        <TouchableOpacity style={styles.attachButton}>
-          <Ionicons name="add-outline" size={28} color={Colors.primary} />
-        </TouchableOpacity>
+      <View style={styles.inputAreaWrapper}>
+        {selectedImage && (
+          <View style={styles.selectedImagePreviewContainer}>
+            <Image source={{ uri: selectedImage }} style={styles.selectedImagePreview} />
+            <TouchableOpacity style={styles.removeImageButton} onPress={() => { setSelectedImage(null); setSelectedImageBase64(null); }}>
+              <Ionicons name="close-circle" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
+        <View style={styles.inputArea}>
+          <TouchableOpacity style={styles.attachButton} onPress={pickImage}>
+            <Ionicons name="add-outline" size={28} color={Colors.primary} />
+          </TouchableOpacity>
         
         <View style={styles.inputContainer}>
           <TextInput 
@@ -139,12 +183,13 @@ export default function ChatScreen() {
         </View>
 
         <TouchableOpacity 
-          style={[styles.sendButton, !inputText.trim() && { opacity: 0.5 }]} 
+          style={[styles.sendButton, (!inputText.trim() && !selectedImage) && { opacity: 0.5 }]} 
           onPress={handleSend}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() && !selectedImage}
         >
           <Ionicons name="send" size={18} color={Colors.background} />
         </TouchableOpacity>
+      </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -285,5 +330,35 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  inputAreaWrapper: {
+    backgroundColor: Colors.surface,
+  },
+  selectedImagePreviewContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    flexDirection: 'row',
+  },
+  selectedImagePreview: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 8,
+    left: 70,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+  },
+  messageImageContainer: {
+    marginBottom: 8,
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
   }
 });

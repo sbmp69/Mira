@@ -1,6 +1,6 @@
 export interface MessageContext {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | any[];
 }
 
 export interface AIGenerationOptions {
