@@ -1,13 +1,50 @@
 // Base URL for the local backend
 // Android emulator uses 10.0.2.2 to access localhost, iOS uses localhost
-import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BASE_URL = 'https://mira-ruby-six.vercel.app/api';
 
+export const authApi = {
+  async setToken(token: string) {
+    await AsyncStorage.setItem('userToken', token);
+  },
+  async getToken() {
+    return await AsyncStorage.getItem('userToken');
+  },
+  async logout() {
+    await AsyncStorage.removeItem('userToken');
+  },
+  async login(email: string, password: string) {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    await this.setToken(data.token);
+    return data.user;
+  },
+  async register(name: string, email: string, password: string) {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    await this.setToken(data.token);
+    return data.user;
+  }
+};
+
 export const chatApi = {
   async getCompanions() {
+    const token = await authApi.getToken();
     try {
-      const response = await fetch(`${BASE_URL}/companions`);
+      const response = await fetch(`${BASE_URL}/companions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await response.json();
       return data.companions;
     } catch (error) {
@@ -17,11 +54,13 @@ export const chatApi = {
   },
 
   async sendMessage(userId: string, companionId: string, message: string, imageBase64?: string, audioBase64?: string) {
+    const token = await authApi.getToken();
     try {
       const response = await fetch(`${BASE_URL}/chat/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           userId,

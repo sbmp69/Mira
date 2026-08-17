@@ -3,15 +3,32 @@ import { prisma } from '../db';
 import { OpenAIProvider } from '../ai/openai';
 import { AIEngine } from '../ai/engine';
 import { MemoryService } from '../ai/memory';
+import { AIProvider } from '../ai/provider';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretfallbackkey';
 const aiProvider = new OpenAIProvider();
 const engine = new AIEngine(aiProvider);
 const memoryService = new MemoryService(aiProvider);
 
 router.post('/send', async (req, res) => {
   try {
-    let { userId, companionId, message, image, audio } = req.body;
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid authorization header' });
+    }
+    const token = authHeader.split(' ')[1];
+    
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, JWT_SECRET) as { userId: string };
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const userId = decodedToken.userId;
+
+    let { companionId, message, image, audio } = req.body;
 
     // If audio is provided, transcribe it first
     if (audio) {

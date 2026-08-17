@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import chatRouter from './routes/chat';
 import companionsRouter from './routes/companions';
+import authRouter from './routes/auth';
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/chat', chatRouter);
 app.use('/api/companions', companionsRouter);
+app.use('/api/auth', authRouter);
 
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
