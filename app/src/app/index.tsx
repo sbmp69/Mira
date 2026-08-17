@@ -1,10 +1,36 @@
-import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { chatApi } from '../services/api';
+
+interface Companion {
+  id: string;
+  name: string;
+  avatar: string;
+  description: string;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [companions, setCompanions] = useState<Companion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCompanions = async () => {
+      try {
+        const data = await chatApi.getCompanions();
+        setCompanions(data);
+      } catch (error) {
+        console.error('Failed to load companions');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCompanions();
+  }, []);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
@@ -18,31 +44,38 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Companion Card */}
-      <View style={styles.companionCard}>
-        <Image 
-          source={{ uri: 'https://images.unsplash.com/photo-1616091093714-c64882e9ab55?q=80&w=600&auto=format&fit=crop' }} 
-          style={styles.companionImage}
-        />
-        <View style={styles.cardOverlay}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.companionName}>M I R A</Text>
-            <View style={styles.onlineBadge} />
-          </View>
-          <Text style={styles.companionMessage}>"I was waiting for you..."</Text>
-          
-          <TouchableOpacity 
-            style={[styles.chatButton, { zIndex: 10, elevation: 10 }]}
-            onPress={() => {
-              console.log('Navigating to chat...');
-              router.push({ pathname: '/chat/[id]', params: { id: '815ca4b0-1ffe-441f-b519-66ef79040b30' } });
-            }}
-          >
-            <Text style={styles.chatButtonText}>Enter Chat</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.background} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* Companion List */}
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 50 }} />
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.companionList} contentContainerStyle={styles.companionListContent}>
+          {companions.map((companion) => (
+            <View key={companion.id} style={styles.companionCard}>
+              <Image 
+                source={{ uri: companion.avatar }} 
+                style={styles.companionImage}
+              />
+              <View style={styles.cardOverlay}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.companionName}>{companion.name.toUpperCase().split('').join(' ')}</Text>
+                  <View style={styles.onlineBadge} />
+                </View>
+                <Text style={styles.companionMessage}>{companion.description}</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.chatButton, { zIndex: 10, elevation: 10 }]}
+                  onPress={() => {
+                    router.push({ pathname: '/chat/[id]', params: { id: companion.id } });
+                  }}
+                >
+                  <Text style={styles.chatButtonText}>Enter Chat</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.background} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Stats row */}
       <View style={styles.statsRow}>
@@ -92,13 +125,20 @@ const styles = StyleSheet.create({
   profileBtn: {
     padding: 4,
   },
+  companionList: {
+    marginBottom: 30,
+    marginHorizontal: -24, // Break out of padding
+  },
+  companionListContent: {
+    paddingHorizontal: 24,
+    gap: 16,
+  },
   companionCard: {
-    width: '100%',
-    height: 480, // Taller, more elegant
-    borderRadius: 16, // Less rounded, sharper look
+    width: 300,
+    height: 480,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
-    marginBottom: 30,
     position: 'relative',
     borderWidth: 1,
     borderColor: Colors.glassBorder,

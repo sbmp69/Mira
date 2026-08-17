@@ -5,6 +5,17 @@ import { Platform } from 'react-native';
 const BASE_URL = 'https://mira-ruby-six.vercel.app/api';
 
 export const chatApi = {
+  async getCompanions() {
+    try {
+      const response = await fetch(`${BASE_URL}/companions`);
+      const data = await response.json();
+      return data.companions;
+    } catch (error) {
+      console.error('Error fetching companions:', error);
+      throw error;
+    }
+  },
+
   async sendMessage(userId: string, companionId: string, message: string, imageBase64?: string, audioBase64?: string) {
     try {
       const response = await fetch(`${BASE_URL}/chat/send`, {
