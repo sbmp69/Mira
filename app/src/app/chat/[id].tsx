@@ -192,9 +192,14 @@ export default function ChatScreen() {
           <Text style={styles.headerTitle}>M I R A</Text>
           <Text style={styles.headerSubtitle}>Online</Text>
         </View>
-        <TouchableOpacity style={styles.menuButton}>
-          <Ionicons name="ellipsis-vertical" size={24} color={Colors.textMuted} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.callButton} onPress={() => router.push(`/call/${id}`)}>
+            <Ionicons name="call" size={22} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton}>
+            <Ionicons name="ellipsis-vertical" size={24} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Chat Area */}
@@ -320,6 +325,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '300',
     letterSpacing: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: -8,
+  },
+  callButton: {
+    padding: 8,
+    marginRight: 8,
   },
   menuButton: {
     padding: 8,
