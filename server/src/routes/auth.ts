@@ -74,4 +74,35 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/push-token
+router.post('/push-token', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid authorization header' });
+    }
+    const token = authHeader.split(' ')[1];
+    
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, JWT_SECRET as string) as any as { userId: string };
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const { pushToken } = req.body;
+    if (!pushToken) return res.status(400).json({ error: 'Missing pushToken' });
+
+    await prisma.user.update({
+      where: { id: decodedToken.userId },
+      data: { expoPushToken: pushToken }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Push token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

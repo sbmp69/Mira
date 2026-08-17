@@ -6,12 +6,19 @@ export class MemoryService {
 
   /**
    * Evaluates the latest user message to see if a memory should be extracted and saved.
+   * Also analyzes sentiment to progress the relationship stage.
    */
-  public async extractAndSaveMemory(userId: string, userMessage: string): Promise<void> {
-    // 1. Ask the AI if there is a memory to extract
-    const extractionPrompt = `Analyze the following user message and extract any important personal information, preferences, or events that a close companion should remember. 
-If there is nothing worth remembering, output exactly "NONE".
-If there is a memory, output it as a concise statement (e.g., "User's birthday is October 12", "User hates pineapple on pizza", "User has a college exam tomorrow").
+  public async extractAndSaveMemory(userId: string, conversationId: string, userMessage: string): Promise<void> {
+    // 1. Ask the AI if there is a memory to extract, and get sentiment
+    const extractionPrompt = `Analyze the following user message. 
+First, extract any important personal information, preferences, or events that a close companion should remember. If there is nothing worth remembering, output "NONE" for the memory.
+Second, analyze the sentiment of the message towards the companion. Is the user being kind/affectionate (+1), neutral (0), or mean/abusive (-1)?
+
+You MUST return a raw JSON object (without markdown code blocks) exactly matching this format:
+{
+  "memory": "concise statement or NONE",
+  "sentiment": 1 or 0 or -1
+}
 
 User Message: "${userMessage}"`;
 
@@ -20,20 +27,46 @@ User Message: "${userMessage}"`;
       temperature: 0.1, // Low temp for extraction tasks
     });
 
-    if (extractedResult.trim() === 'NONE' || extractedResult.trim().length === 0) {
+    let resultJson;
+    try {
+      let cleaned = extractedResult.trim();
+      if (cleaned.startsWith('```json')) cleaned = cleaned.replace(/```json\n?/, '').replace(/```$/, '');
+      if (cleaned.startsWith('```')) cleaned = cleaned.replace(/```\n?/, '').replace(/```$/, '');
+      resultJson = JSON.parse(cleaned.trim());
+    } catch (e) {
+      console.error('Failed to parse memory/sentiment JSON:', extractedResult);
+      return;
+    }
+
+    // Process Sentiment -> Relationship Stage
+    if (resultJson.sentiment === 1) {
+      // Small chance to increment relationship stage if they are being nice
+      if (Math.random() > 0.5) { // 50% chance on a positive message to grow
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            relationshipStage: {
+              increment: 1
+            }
+          }
+        });
+        console.log(`[RELATIONSHIP UP] Conversation ${conversationId} grew closer!`);
+      }
+    }
+
+    if (resultJson.memory === 'NONE' || !resultJson.memory) {
       return; // Nothing to remember
     }
 
     // 2. Generate embedding for the extracted memory
-    const embedding = await this.aiProvider.generateEmbedding({ input: extractedResult });
+    const embedding = await this.aiProvider.generateEmbedding({ input: resultJson.memory });
 
     // 3. Save to database using raw SQL for the vector column
-    // Prisma requires raw queries to insert vector data directly
     const pgVector = `[${embedding.join(',')}]`;
     
     await prisma.$executeRaw`
       INSERT INTO "Memory" ("id", "userId", "content", "type", "importance", "createdAt", "embedding")
-      VALUES (gen_random_uuid(), ${userId}, ${extractedResult}, 'personal', 'medium', NOW(), ${pgVector}::vector)
+      VALUES (gen_random_uuid(), ${userId}, ${resultJson.memory}, 'personal', 'medium', NOW(), ${pgVector}::vector)
     `;
   }
 

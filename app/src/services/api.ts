@@ -35,6 +35,18 @@ export const authApi = {
     if (!res.ok) throw new Error(data.error);
     await this.setToken(data.token);
     return data.user;
+  },
+  async updatePushToken(pushToken: string) {
+    const token = await this.getToken();
+    if (!token) return;
+    await fetch(`${BASE_URL}/auth/push-token`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ pushToken })
+    });
   }
 };
 

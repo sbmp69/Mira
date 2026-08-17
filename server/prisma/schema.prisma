@@ -15,6 +15,7 @@ model User {
   name          String?
   country       String?
   languagePref  String?        @default("Auto")
+  expoPushToken String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]

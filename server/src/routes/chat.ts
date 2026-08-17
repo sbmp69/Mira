@@ -81,7 +81,7 @@ router.post('/send', async (req, res) => {
     });
 
     // 4. Extract and save memory in background (don't await so we respond faster)
-    memoryService.extractAndSaveMemory(userId, message).catch(console.error);
+    memoryService.extractAndSaveMemory(userId, conversation.id, message).catch(console.error);
 
     // 5. Retrieve relevant memories for context
     const relevantMemories = await memoryService.retrieveRelevantMemories(userId, message);
