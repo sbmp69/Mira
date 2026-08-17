@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "Mira",
+    "slug": "meet",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "app",
+    "scheme": "mira",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.mira.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,6 +38,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "17429427-78fa-4c7c-99d0-6bdeb6fecbd0"
+      }
+    },
+    "owner": "meetajudia11s-team"
   }
 }
