@@ -2,7 +2,7 @@
 // Android emulator uses 10.0.2.2 to access localhost, iOS uses localhost
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'https://mira-ruby-six.vercel.app/api';
+const BASE_URL = 'http://localhost:3000/api';
 
 export const authApi = {
   async setToken(token: string) {

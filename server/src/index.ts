@@ -23,10 +23,11 @@ app.use('/api/companions', companionsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/cron', cronRouter);
 
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-}
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// Keep event loop alive explicitly (should not be needed, but just in case)
+setInterval(() => {}, 1000 * 60 * 60);
 
 export default app;
