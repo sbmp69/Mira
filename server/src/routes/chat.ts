@@ -19,10 +19,13 @@ router.post('/send', async (req, res) => {
       return res.status(401).json({ error: 'Missing or invalid authorization header' });
     }
     const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Missing token' });
+    }
     
     let decodedToken;
     try {
-      decodedToken = jwt.verify(token, JWT_SECRET) as { userId: string };
+      decodedToken = jwt.verify(token, JWT_SECRET as string) as any as { userId: string };
     } catch (err) {
       return res.status(401).json({ error: 'Invalid token' });
     }
