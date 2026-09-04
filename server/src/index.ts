@@ -23,11 +23,10 @@ app.use('/api/companions', companionsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/cron', cronRouter);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
-
-// Keep event loop alive explicitly (should not be needed, but just in case)
-setInterval(() => {}, 1000 * 60 * 60);
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
 
 export default app;
