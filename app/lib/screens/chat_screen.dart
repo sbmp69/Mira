@@ -204,12 +204,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (repliedMsg != null) repliedText = repliedMsg['text'] as String?;
                 }
                 
-                return GestureDetector(
-                  onLongPress: () {
+                return Dismissible(
+                  key: Key(msg['id']),
+                  direction: isUser ? DismissDirection.endToStart : DismissDirection.startToEnd,
+                  confirmDismiss: (direction) async {
                     setState(() {
                       replyToMessage = msg;
                     });
+                    return false;
                   },
+                  background: Container(
+                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const Icon(Icons.reply, color: AppColors.primary),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 24),
                     child: Align(
