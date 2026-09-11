@@ -83,7 +83,7 @@ class ChatApi {
     final response = await http.get(
       Uri.parse('$baseUrl/companions'),
       headers: {'Authorization': 'Bearer $token'},
-    );
+    ).timeout(const Duration(seconds: 10));
     if (response.statusCode >= 400) throw Exception('Failed to fetch companions');
     final data = jsonDecode(response.body);
     return data['companions'];

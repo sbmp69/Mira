@@ -13,6 +13,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> companions = [];
   bool loading = true;
+  bool hasError = false;
 
   @override
   void initState() {
@@ -21,21 +22,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchCompanions() async {
+    setState(() { loading = true; hasError = false; });
     try {
       final data = await ChatApi.getCompanions();
       if (mounted) {
         setState(() {
           companions = data;
+          hasError = false;
         });
       }
     } catch (e) {
       debugPrint('Failed to load companions: $e');
+      if (mounted) setState(() { hasError = true; });
     } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
+      if (mounted) setState(() { loading = false; });
     }
   }
 
@@ -85,10 +85,49 @@ class _HomeScreenState extends State<HomeScreen> {
               
               // Companion List
               if (loading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 50.0),
-                    child: CircularProgressIndicator(color: AppColors.primary),
+                SizedBox(
+                  height: 480,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    itemCount: 2,
+                    separatorBuilder: (_, __) => const SizedBox(width: 16),
+                    itemBuilder: (_, __) => Container(
+                      width: 300,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.glassBorder),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 1.5),
+                      ),
+                    ),
+                  ),
+                )
+              else if (hasError)
+                Container(
+                  height: 200,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.wifi_off_rounded, color: AppColors.textMuted, size: 40),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Could not connect to server',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                        onPressed: _fetchCompanions,
+                        child: const Text('Retry', style: TextStyle(color: AppColors.background, letterSpacing: 1)),
+                      ),
+                    ],
                   ),
                 )
               else
