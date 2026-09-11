@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 // Live Vercel backend - works from anywhere in the world
-const String baseUrl = 'https://mira-meet-ajudias-projects.vercel.app/api';
+const String baseUrl = 'https://mira-ruby-six.vercel.app/api';
 
 class AuthApi {
   static Future<void> setToken(String token) async {
