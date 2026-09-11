@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
-// Use 192.168.1.5 for physical device over local network
-const String baseUrl = kIsWeb ? 'http://localhost:3000/api' : 'http://192.168.1.5:3000/api';
+// Live Vercel backend - works from anywhere in the world
+const String baseUrl = 'https://mira-meet-ajudias-projects.vercel.app/api';
 
 class AuthApi {
   static Future<void> setToken(String token) async {
