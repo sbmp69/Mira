@@ -106,20 +106,20 @@ class ChatApi {
     }
   }
 
-  static Future<Map<String, dynamic>> sendMessage(String userId, String companionId, String message, {String? imageBase64, String? audioBase64}) async {
+  static Future<Map<String, dynamic>> sendMessage(String userId, String companionId, String message, {String? imageBase64, String? audioBase64, String? replyToId}) async {
     final token = await AuthApi.getToken();
     final response = await http.post(
       Uri.parse('$baseUrl/chat/send'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token'
+        'Authorization': 'Bearer $token',
       },
       body: jsonEncode({
-        'userId': userId,
         'companionId': companionId,
         'message': message,
         if (imageBase64 != null) 'image': imageBase64,
         if (audioBase64 != null) 'audio': audioBase64,
+        if (replyToId != null) 'replyToId': replyToId,
       }),
     );
     if (response.statusCode >= 400) throw Exception('Network response was not ok');

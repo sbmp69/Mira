@@ -31,7 +31,7 @@ router.post('/send', async (req, res) => {
     }
     const userId = decodedToken.userId;
 
-    let { companionId, message, image, audio } = req.body;
+    let { companionId, message, image, audio, replyToId } = req.body;
 
     // If audio is provided, transcribe it first
     if (audio) {
@@ -50,6 +50,15 @@ router.post('/send', async (req, res) => {
 
     if (!user || !companion) {
       return res.status(404).json({ error: 'User or Companion not found' });
+    }
+
+    // 1.5 Fetch replied message if exists
+    let repliedMessageContent = null;
+    if (replyToId) {
+      const repliedMsg = await prisma.message.findUnique({ where: { id: replyToId } });
+      if (repliedMsg) {
+        repliedMessageContent = repliedMsg.content;
+      }
     }
 
     // 2. Find or create conversation
@@ -76,7 +85,8 @@ router.post('/send', async (req, res) => {
         conversationId: conversation.id,
         sender: 'USER',
         content: message,
-        image: image || null
+        image: image || null,
+        replyToId: replyToId || null
       }
     });
 
@@ -92,7 +102,13 @@ router.post('/send', async (req, res) => {
       content: m.content,
       imageBase64: m.image || undefined
     }));
-    recentHistory.push({ sender: 'USER', content: message, imageBase64: image || undefined });
+    
+    let contextualMessage = message;
+    if (repliedMessageContent) {
+       contextualMessage = `[User is replying to this specific past message: "${repliedMessageContent}"]\n\nUser says: ${message}`;
+    }
+    
+    recentHistory.push({ sender: 'USER', content: contextualMessage, imageBase64: image || undefined });
 
     // 7. Generate AI Response
     const responseContent = await engine.generateCompanionResponse({

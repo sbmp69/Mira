@@ -20,6 +20,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool isTyping = false;
   bool isRecording = false;
   String? selectedImageUri;
+  Map<String, dynamic>? replyToMessage;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen> {
             'text': msg['content'],
             'isUser': msg['sender'] == 'USER',
             'timestamp': _formatTime(DateTime.parse(msg['createdAt']).toLocal()),
+            'replyToId': msg['replyToId'],
             if (msg['image'] != null) 'imageUri': msg['image'],
           }).toList();
         });
@@ -67,11 +69,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty && selectedImageUri == null) return;
 
+    final String? currentReplyToId = replyToMessage?['id'];
+    
     final userMessage = {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'text': text,
       'isUser': true,
       'timestamp': _formatTime(DateTime.now()),
+      'replyToId': currentReplyToId,
       if (selectedImageUri != null) 'imageUri': selectedImageUri,
     };
 
@@ -79,13 +84,14 @@ class _ChatScreenState extends State<ChatScreen> {
       messages.add(userMessage);
       _textController.clear();
       selectedImageUri = null;
+      replyToMessage = null;
       isTyping = true;
     });
     _scrollToBottom();
 
     try {
-      final userId = await AuthApi.getUserId() ?? '925bfa8e-db2c-4e42-a346-738c6e32ee97'; // default test id
-      final response = await ChatApi.sendMessage(userId, widget.companionId, text);
+      final userId = await AuthApi.getUserId() ?? '925bfa8e-db2c-4e42-a346-738c6e32ee97'; 
+      final response = await ChatApi.sendMessage(userId, widget.companionId, text, replyToId: currentReplyToId);
       
       final aiMessage = {
         'id': response['message']?['id'] ?? (DateTime.now().millisecondsSinceEpoch + 1).toString(),
@@ -189,56 +195,91 @@ class _ChatScreenState extends State<ChatScreen> {
                 final msg = messages[index];
                 final isUser = msg['isUser'] as bool;
                 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Align(
-                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isUser ? AppColors.primary : AppColors.surface,
-                        border: isUser ? null : Border.all(color: AppColors.glassBorder),
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(16),
-                          topRight: const Radius.circular(16),
-                          bottomLeft: Radius.circular(isUser ? 16 : 4),
-                          bottomRight: Radius.circular(isUser ? 4 : 16),
-                        ),
-                      ),
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.8,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (msg['imageUri'] != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(msg['imageUri'], width: 200, height: 200, fit: BoxFit.cover),
-                              ),
-                            ),
-                          if (msg['text'] != null && (msg['text'] as String).isNotEmpty)
-                            Text(
-                              msg['text'],
-                              style: TextStyle(
-                                color: isUser ? AppColors.background : AppColors.text,
-                                fontSize: 15,
-                                height: 1.4,
-                                fontWeight: isUser ? FontWeight.w500 : FontWeight.w300,
-                              ),
-                            ),
-                          const SizedBox(height: 8),
-                          Text(
-                            msg['timestamp'],
-                            style: TextStyle(
-                              color: isUser ? Colors.black54 : AppColors.textMuted,
-                              fontSize: 10,
-                              letterSpacing: 1,
-                            ),
+                String? repliedText;
+                if (msg['replyToId'] != null) {
+                  final repliedMsg = messages.cast<Map<String,dynamic>?>().firstWhere(
+                    (m) => m?['id'] == msg['replyToId'],
+                    orElse: () => null,
+                  );
+                  if (repliedMsg != null) repliedText = repliedMsg['text'] as String?;
+                }
+                
+                return GestureDetector(
+                  onLongPress: () {
+                    setState(() {
+                      replyToMessage = msg;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Align(
+                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isUser ? AppColors.primary : AppColors.surface,
+                          border: isUser ? null : Border.all(color: AppColors.glassBorder),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: Radius.circular(isUser ? 16 : 4),
+                            bottomRight: Radius.circular(isUser ? 4 : 16),
                           ),
-                        ],
+                        ),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.8,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (repliedText != null && repliedText.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: const Border(left: BorderSide(color: AppColors.textMuted, width: 3)),
+                                ),
+                                child: Text(
+                                  repliedText,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isUser ? AppColors.background.withOpacity(0.8) : AppColors.textMuted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            if (msg['imageUri'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(msg['imageUri'], width: 200, height: 200, fit: BoxFit.cover),
+                                ),
+                              ),
+                            if (msg['text'] != null && (msg['text'] as String).isNotEmpty)
+                              Text(
+                                msg['text'],
+                                style: TextStyle(
+                                  color: isUser ? AppColors.background : AppColors.text,
+                                  fontSize: 15,
+                                  height: 1.4,
+                                  fontWeight: isUser ? FontWeight.w500 : FontWeight.w300,
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                            Text(
+                              msg['timestamp'],
+                              style: TextStyle(
+                                color: isUser ? Colors.black54 : AppColors.textMuted,
+                                fontSize: 10,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -246,6 +287,49 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+          if (replyToMessage != null)
+            Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: const Border(left: BorderSide(color: AppColors.primary, width: 4)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            replyToMessage!['isUser'] ? 'Replying to yourself' : 'Replying to M I R A',
+                            style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            replyToMessage!['text'] ?? 'Image',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: AppColors.textMuted, size: 20),
+                      onPressed: () {
+                        setState(() {
+                          replyToMessage = null;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Container(
             color: AppColors.surface,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
