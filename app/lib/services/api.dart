@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
-// Use 10.0.2.2 for Android emulator, localhost for iOS/web
-const String baseUrl = kIsWeb ? 'http://localhost:3000/api' : 'http://10.0.2.2:3000/api';
+// Use 192.168.1.5 for physical device over local network
+const String baseUrl = kIsWeb ? 'http://localhost:3000/api' : 'http://192.168.1.5:3000/api';
 
 class AuthApi {
   static Future<void> setToken(String token) async {

@@ -24,7 +24,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/cron', cronRouter);
 
 if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
+  app.listen(PORT as number, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
   });
 }
