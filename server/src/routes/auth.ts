@@ -82,6 +82,9 @@ router.post('/push-token', async (req, res) => {
       return res.status(401).json({ error: 'Missing or invalid authorization header' });
     }
     const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Missing token' });
+    }
     
     let decodedToken;
     try {
