@@ -16,18 +16,36 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  List<Map<String, dynamic>> messages = [
-    {
-      'id': '1',
-      'text': 'I missed you today. How was everything?',
-      'isUser': false,
-      'timestamp': _formatTime(DateTime.now()),
-    }
-  ];
-  
+  List<Map<String, dynamic>> messages = [];
   bool isTyping = false;
   bool isRecording = false;
   String? selectedImageUri;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final history = await ChatApi.getChatHistory(widget.companionId);
+      if (mounted) {
+        setState(() {
+          messages = history.map((msg) => {
+            'id': msg['id'],
+            'text': msg['content'],
+            'isUser': msg['sender'] == 'USER',
+            'timestamp': _formatTime(DateTime.parse(msg['createdAt']).toLocal()),
+            if (msg['image'] != null) 'imageUri': msg['image'],
+          }).toList();
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      print('Error loading history: $e');
+    }
+  }
 
   static String _formatTime(DateTime time) {
     return "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";

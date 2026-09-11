@@ -89,6 +89,23 @@ class ChatApi {
     return data['companions'];
   }
 
+  static Future<List<dynamic>> getChatHistory(String companionId) async {
+    final token = await AuthApi.getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/$companionId/history'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['messages'] ?? [];
+    } else {
+      throw Exception('Failed to load chat history');
+    }
+  }
+
   static Future<Map<String, dynamic>> sendMessage(String userId, String companionId, String message, {String? imageBase64, String? audioBase64}) async {
     final token = await AuthApi.getToken();
     final response = await http.post(

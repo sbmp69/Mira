@@ -134,4 +134,45 @@ router.post('/send', async (req, res) => {
   }
 });
 
+// GET /api/chat/:companionId/history
+router.get('/:companionId/history', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid authorization header' });
+    }
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Missing token' });
+    }
+    
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, JWT_SECRET as string) as any as { userId: string };
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const userId = decodedToken.userId;
+    const { companionId } = req.params;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { userId, companionId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' }, // Oldest first for chat UI
+        }
+      }
+    });
+
+    if (!conversation) {
+      return res.json({ messages: [] });
+    }
+
+    res.json({ messages: conversation.messages });
+  } catch (error) {
+    console.error('Chat history error:', error);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
 export default router;
