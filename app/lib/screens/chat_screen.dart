@@ -529,10 +529,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: const Icon(Icons.send, color: AppColors.background, size: 18),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                ], // closes Row children
+              ),   // closes Row
+             ],    // closes Column children
+            ),     // closes Column
+           ),      // closes SafeArea
+          ),       // closes Container
         ],
       ),
     );
