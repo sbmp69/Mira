@@ -35,6 +35,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleGoogleLogin() async {
+    setState(() => _loading = true);
+    try {
+      await AuthApi.signInWithGoogle();
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Login Failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -118,12 +134,32 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   child: Text(
-                    _loading ? 'Authenticating...' : 'Sign In',
+                    _loading ? 'Logging in...' : 'Log In',
                     style: const TextStyle(
                       color: AppColors.background,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _handleGoogleLogin,
+                  icon: const Icon(Icons.g_mobiledata, size: 32, color: AppColors.text),
+                  label: const Text(
+                    'Continue with Google',
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.all(12),
+                    side: const BorderSide(color: AppColors.surfaceLight),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),

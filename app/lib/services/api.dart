@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 // Live Vercel backend - works from anywhere in the world
 const String baseUrl = 'https://mira-ruby-six.vercel.app/api';
+
+const String _webClientId = '889653796087-0flsh8i8lhmon6df25ess3h83h7e3jft.apps.googleusercontent.com';
 
 class AuthApi {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -49,6 +52,38 @@ class AuthApi {
       'id': response.user!.id,
       'email': response.user!.email,
       'name': response.user!.userMetadata?['name'] ?? email.split('@')[0],
+    };
+  }
+
+  // Sign in with Google
+  static Future<Map<String, dynamic>> signInWithGoogle() async {
+    final GoogleSignIn googleSignIn = GoogleSignIn(
+      serverClientId: _webClientId,
+    );
+    
+    final googleUser = await googleSignIn.signIn();
+    if (googleUser == null) throw Exception('Google sign in aborted');
+    
+    final googleAuth = await googleUser.authentication;
+    final accessToken = googleAuth.accessToken;
+    final idToken = googleAuth.idToken;
+    
+    if (idToken == null) {
+      throw Exception('No ID Token found.');
+    }
+    
+    final response = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+    
+    if (response.user == null) throw Exception('Supabase sign in failed');
+    
+    return {
+      'id': response.user!.id,
+      'email': response.user!.email,
+      'name': response.user!.userMetadata?['name'] ?? response.user!.email?.split('@')[0] ?? 'User',
     };
   }
 
