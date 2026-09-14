@@ -6,7 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 // Live Vercel backend - works from anywhere in the world
 const String baseUrl = 'https://mira-ruby-six.vercel.app/api';
 
-const String _webClientId = '889653796087-0flsh8i8lhmon6df25ess3h83h7e3jft.apps.googleusercontent.com';
+const String _webClientId = '889653796087-36716r0t13c7d28galscaadv0s8t26er.apps.googleusercontent.com';
 
 class AuthApi {
   static SupabaseClient get _client => Supabase.instance.client;
