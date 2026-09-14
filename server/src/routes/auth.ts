@@ -91,6 +91,8 @@ router.post("/push-token", requireAuth, async (req, res) => {
     console.error("Push token error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
 // DELETE /api/auth/account (protected)
 router.delete("/account", requireAuth, async (req, res) => {
   try {
