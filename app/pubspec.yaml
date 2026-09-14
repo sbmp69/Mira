@@ -98,11 +98,11 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/mira_logo.png"
+  image_path: "assets/mira_logo_new.jpg"
 
 flutter_native_splash:
   color: "#0B0B0B"
-  image: assets/mira_logo.png
+  image: assets/mira_logo_new.jpg
   android_12:
     color: "#0B0B0B"
-    image: assets/mira_logo.png
+    image: assets/mira_logo_new.jpg
