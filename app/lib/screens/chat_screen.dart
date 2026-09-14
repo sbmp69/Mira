@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../constants/colors.dart';
 import '../services/api.dart';
 
@@ -100,17 +103,35 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _picker = ImagePicker();
   
   List<Map<String, dynamic>> messages = [];
   bool isTyping = false;
   bool isRecording = false;
   String? selectedImageUri;
+  String? selectedImageBase64;
   Map<String, dynamic>? replyToMessage;
 
   @override
   void initState() {
     super.initState();
     _loadHistory();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+      if (image != null) {
+        final bytes = await File(image.path).readAsBytes();
+        final base64 = base64Encode(bytes);
+        setState(() {
+          selectedImageUri = image.path;
+          selectedImageBase64 = 'data:image/jpeg;base64,$base64';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -138,6 +159,17 @@ class _ChatScreenState extends State<ChatScreen> {
     return "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
   }
 
+  Widget _buildImage(String uri) {
+    if (uri.startsWith('data:image')) {
+      final base64String = uri.split(',').last;
+      return Image.memory(base64Decode(base64String), width: 200, height: 200, fit: BoxFit.cover);
+    } else if (uri.startsWith('http')) {
+      return Image.network(uri, width: 200, height: 200, fit: BoxFit.cover);
+    } else {
+      return Image.file(File(uri), width: 200, height: 200, fit: BoxFit.cover);
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -152,23 +184,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _handleSend() async {
     final text = _textController.text.trim();
-    if (text.isEmpty && selectedImageUri == null) return;
+    if (text.isEmpty && selectedImageBase64 == null) return;
 
     final String? currentReplyToId = replyToMessage?['id'];
-    
+    final String? imageToUpload = selectedImageBase64;
+    final String? localImageUri = selectedImageUri;
+
     final userMessage = {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'text': text,
       'isUser': true,
       'timestamp': _formatTime(DateTime.now()),
       'replyToId': currentReplyToId,
-      if (selectedImageUri != null) 'imageUri': selectedImageUri,
+      if (localImageUri != null) 'imageUri': localImageUri,
     };
 
     setState(() {
       messages.add(userMessage);
       _textController.clear();
       selectedImageUri = null;
+      selectedImageBase64 = null;
       replyToMessage = null;
       isTyping = true;
     });
@@ -176,7 +211,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final userId = await AuthApi.getUserId() ?? '925bfa8e-db2c-4e42-a346-738c6e32ee97'; 
-      final response = await ChatApi.sendMessage(userId, widget.companionId, text, replyToId: currentReplyToId);
+      final response = await ChatApi.sendMessage(
+        userId, 
+        widget.companionId, 
+        text, 
+        replyToId: currentReplyToId,
+        imageBase64: imageToUpload,
+      );
       
       final aiMessage = {
         'id': response['message']?['id'] ?? (DateTime.now().millisecondsSinceEpoch + 1).toString(),
@@ -343,7 +384,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(msg['imageUri'], width: 200, height: 200, fit: BoxFit.cover),
+                                  child: _buildImage(msg['imageUri']),
                                 ),
                               ),
                             if (msg['text'] != null && (msg['text'] as String).isNotEmpty)
@@ -421,22 +462,47 @@ class _ChatScreenState extends State<ChatScreen> {
             color: AppColors.surface,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: SafeArea(
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.add, color: AppColors.primary),
-                    onPressed: () {
-                      // Image picker logic
-                    },
-                  ),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.surfaceLight),
+                  if (selectedImageUri != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(File(selectedImageUri!), width: 80, height: 80, fit: BoxFit.cover),
+                          ),
+                          Positioned(
+                            top: -8,
+                            right: -8,
+                            child: IconButton(
+                              icon: const Icon(Icons.cancel, color: Colors.white, size: 24),
+                              onPressed: () => setState(() {
+                                selectedImageUri = null;
+                                selectedImageBase64 = null;
+                              }),
+                            ),
+                          ),
+                        ],
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add_photo_alternate, color: AppColors.primary),
+                        onPressed: _pickImage,
+                      ),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.surfaceLight),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: TextField(
                         controller: _textController,
                         style: const TextStyle(color: AppColors.text),
