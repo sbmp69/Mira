@@ -1,110 +1,95 @@
-import express from 'express';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
+import express from "express";
+import { createClient } from "@supabase/supabase-js";
+import { prisma } from "../db";
+import { requireAuth } from "../middleware/auth";
 
 const router = express.Router();
-const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretfallbackkey';
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post("/register", async (req, res) => {
   try {
     const { email, password, name } = req.body;
-    
     if (!email || !password || !name) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email already in use' });
-    }
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+    if (error) return res.status(400).json({ error: error.message });
+    if (!data.user) return res.status(400).json({ error: "Signup failed" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-      }
+    // Create user profile in our DB using Supabase Auth UUID
+    await prisma.user.upsert({
+      where: { id: data.user.id },
+      update: {},
+      create: { id: data.user.id, email, name },
     });
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    res.json({
+      token: data.session?.access_token,
+      user: { id: data.user.id, email, name }
+    });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Registration error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    
     if (!email || !password) {
-      return res.status(400).json({ error: 'Missing email or password' });
+      return res.status(400).json({ error: "Missing email or password" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.password) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return res.status(401).json({ error: error.message });
+    if (!data.user || !data.session) return res.status(401).json({ error: "Login failed" });
 
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    // Ensure user profile exists in our DB
+    await prisma.user.upsert({
+      where: { id: data.user.id },
+      update: { email: data.user.email },
+      create: {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "User",
+      }
+    });
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    const user = await prisma.user.findUnique({ where: { id: data.user.id } });
+
+    res.json({
+      token: data.session.access_token,
+      user: { id: data.user.id, email: data.user.email, name: user?.name }
+    });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /api/auth/push-token
-router.post('/push-token', async (req, res) => {
+// POST /api/auth/push-token  (protected)
+router.post("/push-token", requireAuth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization header' });
-    }
-    const token = authHeader.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ error: 'Missing token' });
-    }
-    
-    let decodedToken;
-    try {
-      decodedToken = jwt.verify(token, JWT_SECRET as string) as any as { userId: string };
-    } catch (err) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
+    const userId = (req as any).userId;
     const { pushToken } = req.body;
-    if (!pushToken) return res.status(400).json({ error: 'Missing pushToken' });
+    if (!pushToken) return res.status(400).json({ error: "Missing pushToken" });
 
     await prisma.user.update({
-      where: { id: decodedToken.userId },
+      where: { id: userId },
       data: { expoPushToken: pushToken }
     });
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Push token error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Push token error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

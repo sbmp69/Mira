@@ -3,34 +3,16 @@ import { prisma } from '../db';
 import { OpenAIProvider } from '../ai/openai';
 import { AIEngine } from '../ai/engine';
 import { MemoryService } from '../ai/memory';
-import { AIProvider } from '../ai/provider';
-import jwt from 'jsonwebtoken';
+import { requireAuth } from '../middleware/auth';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretfallbackkey';
 const aiProvider = new OpenAIProvider();
 const engine = new AIEngine(aiProvider);
 const memoryService = new MemoryService(aiProvider);
 
-router.post('/send', async (req, res) => {
+router.post('/send', requireAuth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization header' });
-    }
-    const token = authHeader.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ error: 'Missing token' });
-    }
-    
-    let decodedToken;
-    try {
-      decodedToken = jwt.verify(token, JWT_SECRET as string) as any as { userId: string };
-    } catch (err) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    const userId = decodedToken.userId;
-
+    const userId = (req as any).userId;
     let { companionId, message, image, audio, replyToId } = req.body;
 
     // If audio is provided, transcribe it first
@@ -151,24 +133,9 @@ router.post('/send', async (req, res) => {
 });
 
 // GET /api/chat/:companionId/history
-router.get('/:companionId/history', async (req, res) => {
+router.get('/:companionId/history', requireAuth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization header' });
-    }
-    const token = authHeader.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ error: 'Missing token' });
-    }
-    
-    let decodedToken;
-    try {
-      decodedToken = jwt.verify(token, JWT_SECRET as string) as any as { userId: string };
-    } catch (err) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    const userId = decodedToken.userId;
+    const userId = (req as any).userId;
     const { companionId } = req.params;
 
     const conversation = await prisma.conversation.findFirst({
