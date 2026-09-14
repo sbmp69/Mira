@@ -98,6 +98,21 @@ class AuthApi {
     return _client.auth.currentSession != null;
   }
 
+  // Delete account
+  static Future<void> deleteAccount() async {
+    final token = getToken();
+    if (token == null) return;
+    
+    final response = await http.delete(
+      Uri.parse('$baseUrl/auth/account'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode >= 400) throw Exception('Failed to delete account');
+    await logout();
+  }
+
   static Future<void> updatePushToken(String pushToken) async {
     final token = getToken();
     if (token == null) return;

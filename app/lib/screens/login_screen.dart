@@ -167,9 +167,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(
                   onPressed: () => context.push('/signup'),
                   child: const Text(
-                    'Create an account',
+                    'Don\'t have an account? Sign up',
                     style: TextStyle(color: AppColors.primary, fontSize: 14),
                   ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'By continuing, you agree to our Terms of Service and Privacy Policy.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
               ],
             ),

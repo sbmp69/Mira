@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.account_circle_outlined, size: 36, color: AppColors.primary),
-                    onPressed: () {},
+                    onPressed: () => context.push('/profile'),
                   ),
                 ],
               ),

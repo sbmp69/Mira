@@ -91,6 +91,25 @@ router.post("/push-token", requireAuth, async (req, res) => {
     console.error("Push token error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
+// DELETE /api/auth/account (protected)
+router.delete("/account", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    // We only delete from public.User, which cascades to memories, messages, etc.
+    // Deleting from auth.users requires the Supabase Service Role key.
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+    // Attempt to delete from Supabase Auth if service role is available (optional)
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminClient = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      await adminClient.auth.admin.deleteUser(userId);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete account error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 export default router;
