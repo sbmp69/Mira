@@ -120,7 +120,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery, 
+        imageQuality: 50,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
       if (image != null) {
         final bytes = await File(image.path).readAsBytes();
         final base64 = base64Encode(bytes);
