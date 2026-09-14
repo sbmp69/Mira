@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Live Vercel backend - works from anywhere in the world
 const String baseUrl = 'https://mira-ruby-six.vercel.app/api';
 
-const String _webClientId = '889653796087-36716r0t13c7d28galscaadv0s8t26er.apps.googleusercontent.com';
+String get _webClientId => dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? '';
 
 class AuthApi {
   static SupabaseClient get _client => Supabase.instance.client;
