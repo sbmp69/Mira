@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'constants/colors.dart';
 import 'services/api.dart';
 import 'screens/login_screen.dart';
@@ -9,19 +10,24 @@ import 'screens/home_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/call_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://gnetzjkcnireokgdemsk.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZXR6amtjbmlyZW9rZ2RlbXNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MDUxNzQsImV4cCI6MjEwMjM4MTE3NH0.TGrBSCdAyBxWSSzc2UOzHL6HpyQphOc-TvkuAXazmWc',
+  );
   runApp(const MiraApp());
 }
 
 final _router = GoRouter(
   initialLocation: '/',
-  redirect: (context, state) async {
-    final token = await AuthApi.getToken();
+  redirect: (context, state) {
+    final isLoggedIn = AuthApi.isLoggedIn();
     final inAuthGroup = state.matchedLocation == '/login' || state.matchedLocation == '/signup';
-    
-    if (token == null && !inAuthGroup) {
+
+    if (!isLoggedIn && !inAuthGroup) {
       return '/login';
-    } else if (token != null && inAuthGroup) {
+    } else if (isLoggedIn && inAuthGroup) {
       return '/';
     }
     return null;

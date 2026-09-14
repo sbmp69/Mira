@@ -1,76 +1,75 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Live Vercel backend - works from anywhere in the world
 const String baseUrl = 'https://mira-ruby-six.vercel.app/api';
 
 class AuthApi {
-  static Future<void> setToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('userToken', token);
+  static SupabaseClient get _client => Supabase.instance.client;
+
+  // Get the current Supabase access token
+  static String? getToken() {
+    return _client.auth.currentSession?.accessToken;
   }
 
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('userToken');
-  }
-  
-  static Future<void> setUserId(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('userId', userId);
-  }
-  
-  static Future<String?> getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('userId');
+  // Get the current user ID
+  static String? getUserId() {
+    return _client.auth.currentUser?.id;
   }
 
-  static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('userToken');
-    await prefs.remove('userId');
-  }
-
-  static Future<Map<String, dynamic>> login(String email, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    final data = jsonDecode(response.body);
-    if (response.statusCode >= 400) throw Exception(data['error'] ?? 'Login failed');
-    await setToken(data['token']);
-    if (data['user'] != null && data['user']['id'] != null) {
-      await setUserId(data['user']['id']);
-    }
-    return data['user'];
-  }
-
+  // Sign up with email/password via Supabase Auth
   static Future<Map<String, dynamic>> register(String name, String email, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'email': email, 'password': password}),
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {'name': name},
     );
-    final data = jsonDecode(response.body);
-    if (response.statusCode >= 400) throw Exception(data['error'] ?? 'Signup failed');
-    await setToken(data['token']);
-    if (data['user'] != null && data['user']['id'] != null) {
-      await setUserId(data['user']['id']);
+    if (response.user == null) throw Exception('Signup failed');
+    // Also register in our backend to create the User profile row
+    final token = response.session?.accessToken;
+    if (token != null) {
+      await http.post(
+        Uri.parse('$baseUrl/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'name': name, 'email': email, 'password': password}),
+      );
     }
-    return data['user'];
+    return {'id': response.user!.id, 'email': email, 'name': name};
+  }
+
+  // Sign in with email/password via Supabase Auth
+  static Future<Map<String, dynamic>> login(String email, String password) async {
+    final response = await _client.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+    if (response.user == null) throw Exception('Login failed');
+    return {
+      'id': response.user!.id,
+      'email': response.user!.email,
+      'name': response.user!.userMetadata?['name'] ?? email.split('@')[0],
+    };
+  }
+
+  // Sign out
+  static Future<void> logout() async {
+    await _client.auth.signOut();
+  }
+
+  // Check if user is logged in
+  static bool isLoggedIn() {
+    return _client.auth.currentSession != null;
   }
 
   static Future<void> updatePushToken(String pushToken) async {
-    final token = await getToken();
+    final token = getToken();
     if (token == null) return;
     await http.post(
       Uri.parse('$baseUrl/auth/push-token'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token'
+        'Authorization': 'Bearer $token',
       },
       body: jsonEncode({'pushToken': pushToken}),
     );
@@ -79,7 +78,7 @@ class AuthApi {
 
 class ChatApi {
   static Future<List<dynamic>> getCompanions() async {
-    final token = await AuthApi.getToken();
+    final token = AuthApi.getToken();
     final response = await http.get(
       Uri.parse('$baseUrl/companions'),
       headers: {'Authorization': 'Bearer $token'},
@@ -90,14 +89,11 @@ class ChatApi {
   }
 
   static Future<List<dynamic>> getChatHistory(String companionId) async {
-    final token = await AuthApi.getToken();
+    final token = AuthApi.getToken();
     final response = await http.get(
       Uri.parse('$baseUrl/chat/$companionId/history'),
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Authorization': 'Bearer $token'},
     );
-
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return data['messages'] ?? [];
@@ -107,7 +103,7 @@ class ChatApi {
   }
 
   static Future<Map<String, dynamic>> sendMessage(String userId, String companionId, String message, {String? imageBase64, String? audioBase64, String? replyToId}) async {
-    final token = await AuthApi.getToken();
+    final token = AuthApi.getToken();
     final response = await http.post(
       Uri.parse('$baseUrl/chat/send'),
       headers: {
