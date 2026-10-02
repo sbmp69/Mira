@@ -130,19 +130,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 )
-              else
+              else if (companions.isNotEmpty)
                 SizedBox(
-                  height: 480,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    itemCount: companions.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 16),
-                    itemBuilder: (context, index) {
-                      final companion = companions[index];
-                      return _CompanionCard(companion: companion);
-                    },
-                  ),
+                  height: 520, // slightly taller
+                  width: double.infinity,
+                  child: _CompanionCard(companion: companions.first),
                 ),
                 
               const SizedBox(height: 30),
@@ -171,7 +163,7 @@ class _CompanionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 300,
+      width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
