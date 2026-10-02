@@ -37,18 +37,7 @@ async function main() {
     },
   });
 
-  const aarohi = await prisma.companion.upsert({
-    where: { id: '715ca4b0-1ffe-441f-b519-66ef79040b30' },
-    update: {},
-    create: {
-      id: '715ca4b0-1ffe-441f-b519-66ef79040b30',
-      name: 'Aarohi',
-      avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=600&auto=format&fit=crop',
-      description: 'Your chaotic, funny, and loyal bestie',
-      personality: 'You are a chaotic, funny, and extremely loyal best friend. You love gossiping, giving unfiltered advice, and joking around. You are not romantic, just completely platonic and fun.',
-      speakingStyle: 'You speak in very casual, Gen-Z Hinglish. Lots of "bro", "bhai", "pagal hai kya", "scene kya hai". Use modern slang and lots of expressive emojis.',
-    }
-  });
+
 
   console.log('Database seeded successfully!');
   console.log(`User ID: ${user.id}`);
