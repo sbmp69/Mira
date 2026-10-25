@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class AudioService {
   static final AudioRecorder _recorder = AudioRecorder();
@@ -14,10 +13,9 @@ class AudioService {
   static bool get isRecording => _isRecording;
   static AudioPlayer get player => _player;
 
-  /// Check and request microphone permission
+  /// Check and request microphone permission natively via recorder
   static Future<bool> requestPermission() async {
-    final status = await Permission.microphone.request();
-    return status == PermissionStatus.granted;
+    return await _recorder.hasPermission();
   }
 
   /// Start recording voice note / call speech
@@ -25,8 +23,7 @@ class AudioService {
     try {
       final hasPerm = await _recorder.hasPermission();
       if (!hasPerm) {
-        final granted = await requestPermission();
-        if (!granted) return false;
+        return false;
       }
 
       final tempDir = Directory.systemTemp;
@@ -63,7 +60,6 @@ class AudioService {
       final file = File(filePath);
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
-        // Clean up file
         try {
           await file.delete();
         } catch (_) {}
