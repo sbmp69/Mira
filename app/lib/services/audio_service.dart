@@ -1,0 +1,118 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+class AudioService {
+  static final AudioRecorder _recorder = AudioRecorder();
+  static final AudioPlayer _player = AudioPlayer();
+  static bool _isRecording = false;
+  static String? _currentRecordPath;
+
+  static bool get isRecording => _isRecording;
+  static AudioPlayer get player => _player;
+
+  /// Check and request microphone permission
+  static Future<bool> requestPermission() async {
+    final status = await Permission.microphone.request();
+    return status == PermissionStatus.granted;
+  }
+
+  /// Start recording voice note / call speech
+  static Future<bool> startRecording() async {
+    try {
+      final hasPerm = await _recorder.hasPermission();
+      if (!hasPerm) {
+        final granted = await requestPermission();
+        if (!granted) return false;
+      }
+
+      final tempDir = Directory.systemTemp;
+      _currentRecordPath = '${tempDir.path}/mira_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 44100,
+        ),
+        path: _currentRecordPath!,
+      );
+
+      _isRecording = true;
+      return true;
+    } catch (e) {
+      debugPrint('Error starting recording: $e');
+      _isRecording = false;
+      return false;
+    }
+  }
+
+  /// Stop recording and return base64 encoded audio
+  static Future<String?> stopRecording() async {
+    try {
+      if (!_isRecording) return null;
+      final path = await _recorder.stop();
+      _isRecording = false;
+
+      final filePath = path ?? _currentRecordPath;
+      if (filePath == null) return null;
+
+      final file = File(filePath);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        // Clean up file
+        try {
+          await file.delete();
+        } catch (_) {}
+        return base64Encode(bytes);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error stopping recording: $e');
+      _isRecording = false;
+      return null;
+    }
+  }
+
+  /// Cancel recording without saving
+  static Future<void> cancelRecording() async {
+    try {
+      if (_isRecording) {
+        final path = await _recorder.stop();
+        _isRecording = false;
+        if (path != null) {
+          final file = File(path);
+          if (await file.exists()) await file.delete();
+        }
+      }
+    } catch (_) {
+      _isRecording = false;
+    }
+  }
+
+  /// Play audio from base64 string or URL
+  static Future<void> playAudio(String audioSource) async {
+    try {
+      await _player.stop();
+      if (audioSource.startsWith('data:audio') || !audioSource.startsWith('http')) {
+        final base64Data = audioSource.contains(',') ? audioSource.split(',').last : audioSource;
+        final bytes = base64Decode(base64Data);
+        await _player.play(BytesSource(bytes));
+      } else {
+        await _player.play(UrlSource(audioSource));
+      }
+    } catch (e) {
+      debugPrint('Error playing audio: $e');
+    }
+  }
+
+  /// Stop playing audio
+  static Future<void> stopAudio() async {
+    try {
+      await _player.stop();
+    } catch (_) {}
+  }
+}

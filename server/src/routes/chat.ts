@@ -13,7 +13,7 @@ const memoryService = new MemoryService(aiProvider);
 router.post('/send', requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    let { companionId, message, image, audio, replyToId } = req.body;
+    let { companionId, message, image, audio, replyToId, wantAudio } = req.body;
 
     // If audio is provided, transcribe it first
     if (audio) {
@@ -45,7 +45,7 @@ router.post('/send', requireAuth, async (req, res) => {
 
     // 2. Find or create conversation
     let conversation = await prisma.conversation.findFirst({
-      where: { userId, companionId },
+      where: { userId, companionId: companionId as string },
       include: {
         messages: {
           orderBy: { createdAt: 'desc' },
@@ -114,9 +114,9 @@ router.post('/send', requireAuth, async (req, res) => {
       }
     });
 
-    // 9. If the user sent audio, send audio back (TTS)
+    // 9. If the user sent audio or requested audio (TTS)
     let audioData = null;
-    if (audio) {
+    if (audio || wantAudio) {
       try {
         audioData = await aiProvider.generateSpeech({ input: responseContent });
       } catch (err) {
@@ -155,6 +155,20 @@ router.get('/:companionId/history', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Chat history error:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+
+// POST /api/chat/speak (TTS on demand)
+router.post('/speak', requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Missing text' });
+    const audioData = await aiProvider.generateSpeech({ input: text });
+    res.json({ audioData });
+  } catch (error) {
+    console.error('TTS speak error:', error);
+    res.status(500).json({ error: 'Failed to generate speech' });
   }
 });
 

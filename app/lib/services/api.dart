@@ -189,7 +189,7 @@ class ChatApi {
     }
   }
 
-  static Future<Map<String, dynamic>> sendMessage(String userId, String companionId, String message, {String? imageBase64, String? audioBase64, String? replyToId}) async {
+  static Future<Map<String, dynamic>> sendMessage(String userId, String companionId, String message, {String? imageBase64, String? audioBase64, String? replyToId, bool wantAudio = false}) async {
     final token = AuthApi.getToken();
     final response = await http.post(
       Uri.parse('$baseUrl/chat/send'),
@@ -203,9 +203,28 @@ class ChatApi {
         if (imageBase64 != null) 'image': imageBase64,
         if (audioBase64 != null) 'audio': audioBase64,
         if (replyToId != null) 'replyToId': replyToId,
+        if (wantAudio) 'wantAudio': true,
       }),
     );
     if (response.statusCode >= 400) throw Exception('Network response was not ok');
     return jsonDecode(response.body);
   }
+
+  static Future<String?> speakText(String text) async {
+    final token = AuthApi.getToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/speak'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'text': text}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['audioData'];
+    }
+    return null;
+  }
+
 }

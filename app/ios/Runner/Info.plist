@@ -26,6 +26,8 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+\t<key>NSMicrophoneUsageDescription</key>
+\t<string>Mira needs microphone access for voice calls and audio notes.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>
@@ -70,3 +72,4 @@
 		<false/>
 	</dict>
 </plist>
+
