@@ -14,15 +14,55 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> companions = [];
   bool loading = true;
   bool hasError = false;
+  String userName = 'Friend';
+  int interactions = 0;
+  int memories = 0;
 
   @override
   void initState() {
     super.initState();
-    _fetchCompanions();
+    userName = AuthApi.getUserName();
+    _loadAll();
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'GOOD MORNING,';
+    } else if (hour >= 12 && hour < 17) {
+      return 'GOOD AFTERNOON,';
+    } else if (hour >= 17 && hour < 22) {
+      return 'GOOD EVENING,';
+    } else {
+      return 'GOOD NIGHT,';
+    }
+  }
+
+  String _formatNumber(int number) {
+    final str = number.toString();
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return str.replaceAllMapped(reg, (Match m) => '${m[1]},');
+  }
+
+  Future<void> _loadAll() async {
+    setState(() {
+      if (companions.isEmpty) loading = true;
+      hasError = false;
+    });
+
+    await Future.wait([
+      _fetchCompanions(),
+      _fetchProfileAndStats(),
+    ]);
+
+    if (mounted) {
+      setState(() {
+        loading = false;
+      });
+    }
   }
 
   Future<void> _fetchCompanions() async {
-    setState(() { loading = true; hasError = false; });
     try {
       final data = await ChatApi.getCompanions();
       if (mounted) {
@@ -33,121 +73,173 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       debugPrint('Failed to load companions: $e');
-      if (mounted) setState(() { hasError = true; });
-    } finally {
-      if (mounted) setState(() { loading = false; });
+      if (mounted && companions.isEmpty) {
+        setState(() { hasError = true; });
+      }
+    }
+  }
+
+  Future<void> _fetchProfileAndStats() async {
+    try {
+      final data = await AuthApi.getProfile();
+      if (mounted) {
+        final user = data['user'];
+        final stats = data['stats'];
+        setState(() {
+          if (user != null && user['name'] != null && (user['name'] as String).trim().isNotEmpty) {
+            userName = (user['name'] as String).trim();
+          }
+          if (stats != null) {
+            interactions = (stats['interactions'] as num?)?.toInt() ?? 0;
+            memories = (stats['memories'] as num?)?.toInt() ?? 0;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load profile: $e');
+      if (mounted) {
+        setState(() {
+          userName = AuthApi.getUserName();
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 60, left: 24, right: 24, bottom: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'GOOD EVENING,',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 10,
-                          letterSpacing: 3,
+      body: RefreshIndicator(
+        onRefresh: _loadAll,
+        color: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 60, left: 24, right: 24, bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _getGreeting(),
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 10,
+                            letterSpacing: 3,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Meet',
-                        style: TextStyle(
-                          color: AppColors.text,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w300,
-                          letterSpacing: 1,
+                        const SizedBox(height: 4),
+                        Text(
+                          userName,
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w300,
+                            letterSpacing: 1,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.account_circle_outlined, size: 36, color: AppColors.primary),
-                    onPressed: () => context.push('/profile'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 40),
-              
-              // Companion List
-              if (loading)
-                SizedBox(
-                  height: 480,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    itemCount: 2,
-                    separatorBuilder: (_, __) => const SizedBox(width: 16),
-                    itemBuilder: (_, __) => Container(
-                      width: 300,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.glassBorder),
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 1.5),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.account_circle_outlined, size: 36, color: AppColors.primary),
+                      onPressed: () async {
+                        await context.push('/profile');
+                        _loadAll();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+                
+                // Companion List
+                if (loading)
+                  SizedBox(
+                    height: 480,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      itemCount: 1,
+                      separatorBuilder: (_, __) => const SizedBox(width: 16),
+                      itemBuilder: (_, __) => Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.glassBorder),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 1.5),
+                        ),
                       ),
                     ),
-                  ),
-                )
-              else if (hasError)
-                Container(
-                  height: 200,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.wifi_off_rounded, color: AppColors.textMuted, size: 40),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Could not connect to server',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 14),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  )
+                else if (hasError)
+                  Container(
+                    height: 200,
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.wifi_off_rounded, color: AppColors.textMuted, size: 40),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Could not connect to server',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
                         ),
-                        onPressed: _fetchCompanions,
-                        child: const Text('Retry', style: TextStyle(color: AppColors.background, letterSpacing: 1)),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                          onPressed: _loadAll,
+                          child: const Text('Retry', style: TextStyle(color: AppColors.background, letterSpacing: 1)),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (companions.isNotEmpty)
+                  SizedBox(
+                    height: 520,
+                    width: double.infinity,
+                    child: _CompanionCard(
+                      companion: companions.first,
+                      onReturn: _fetchProfileAndStats,
+                    ),
                   ),
-                )
-              else if (companions.isNotEmpty)
-                SizedBox(
-                  height: 520, // slightly taller
-                  width: double.infinity,
-                  child: _CompanionCard(companion: companions.first),
-                ),
+                  
+                const SizedBox(height: 30),
                 
-              const SizedBox(height: 30),
-              
-              // Stats Row
-              Row(
-                children: [
-                  Expanded(child: _StatBox(icon: Icons.favorite_border, value: '1,284', label: 'INTERACTIONS', color: AppColors.secondary)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _StatBox(icon: Icons.hub_outlined, value: '124', label: 'MEMORIES', color: AppColors.primary)),
-                ],
-              ),
-            ],
+                // Stats Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatBox(
+                        icon: Icons.favorite_border,
+                        value: _formatNumber(interactions),
+                        label: 'INTERACTIONS',
+                        color: AppColors.secondary,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _StatBox(
+                        icon: Icons.hub_outlined,
+                        value: _formatNumber(memories),
+                        label: 'MEMORIES',
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -157,8 +249,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _CompanionCard extends StatelessWidget {
   final dynamic companion;
+  final VoidCallback? onReturn;
 
-  const _CompanionCard({required this.companion});
+  const _CompanionCard({required this.companion, this.onReturn});
 
   @override
   Widget build(BuildContext context) {
@@ -240,8 +333,9 @@ class _CompanionCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
-                      onPressed: () {
-                        context.push('/chat/${companion['id']}');
+                      onPressed: () async {
+                        await context.push('/chat/${companion['id']}');
+                        onReturn?.call();
                       },
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,

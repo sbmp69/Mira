@@ -22,6 +22,42 @@ class AuthApi {
     return _client.auth.currentUser?.id;
   }
 
+  // Get current user display name
+  static String getUserName() {
+    final metaName = _client.auth.currentUser?.userMetadata?['name'] as String?;
+    if (metaName != null && metaName.trim().isNotEmpty) {
+      return metaName.trim();
+    }
+    final email = _client.auth.currentUser?.email;
+    if (email != null && email.contains('@')) {
+      final handle = email.split('@').first;
+      if (handle.isNotEmpty) {
+        return handle[0].toUpperCase() + handle.substring(1);
+      }
+    }
+    return 'Friend';
+  }
+
+  // Get current user email
+  static String? getUserEmail() {
+    return _client.auth.currentUser?.email;
+  }
+
+  // Fetch full user profile & stats from backend
+  static Future<Map<String, dynamic>> getProfile() async {
+    final token = getToken();
+    if (token == null) throw Exception('Not authenticated');
+    final response = await http.get(
+      Uri.parse('$baseUrl/auth/profile'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to load profile');
+    }
+    return jsonDecode(response.body);
+  }
+
   // Sign up with email/password via Supabase Auth
   static Future<Map<String, dynamic>> register(String name, String email, String password) async {
     final response = await _client.auth.signUp(

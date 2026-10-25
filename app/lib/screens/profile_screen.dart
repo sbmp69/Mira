@@ -12,6 +12,35 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = false;
+  late String _userName;
+  String? _userEmail;
+
+  @override
+  void initState() {
+    super.initState();
+    _userName = AuthApi.getUserName();
+    _userEmail = AuthApi.getUserEmail();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final data = await AuthApi.getProfile();
+      if (mounted) {
+        final user = data['user'];
+        if (user != null) {
+          setState(() {
+            if (user['name'] != null && (user['name'] as String).trim().isNotEmpty) {
+              _userName = (user['name'] as String).trim();
+            }
+            if (user['email'] != null) {
+              _userEmail = user['email'];
+            }
+          });
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<void> _handleLogout() async {
     await AuthApi.logout();
@@ -82,7 +111,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.account_circle, size: 80, color: AppColors.surfaceLight),
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: AppColors.surface,
+                      child: Icon(Icons.person, size: 45, color: AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _userName,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.text,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  if (_userEmail != null && _userEmail!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _userEmail!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 40),
                   OutlinedButton.icon(
                     onPressed: _handleLogout,

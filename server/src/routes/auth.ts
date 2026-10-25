@@ -74,6 +74,53 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// GET /api/auth/profile (protected)
+router.get("/profile", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        country: true,
+        languagePref: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const interactions = await prisma.message.count({
+      where: {
+        conversation: {
+          userId,
+        },
+      },
+    });
+
+    const memories = await prisma.memory.count({
+      where: {
+        userId,
+      },
+    });
+
+    res.json({
+      user,
+      stats: {
+        interactions,
+        memories,
+      },
+    });
+  } catch (error) {
+    console.error("Profile fetch error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /api/auth/push-token  (protected)
 router.post("/push-token", requireAuth, async (req, res) => {
   try {
