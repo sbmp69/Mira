@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/colors.dart';
 import '../services/api.dart';
 import '../services/audio_service.dart';
@@ -94,6 +95,208 @@ class _TypingIndicatorState extends State<TypingIndicator>
   }
 }
 
+/// WhatsApp-style Voice Note Audio Bubble
+class VoiceNoteBubble extends StatefulWidget {
+  final String messageId;
+  final String? audioSource;
+  final String text;
+  final bool isUser;
+  final String timestamp;
+
+  const VoiceNoteBubble({
+    super.key,
+    required this.messageId,
+    this.audioSource,
+    required this.text,
+    required this.isUser,
+    required this.timestamp,
+  });
+
+  @override
+  State<VoiceNoteBubble> createState() => _VoiceNoteBubbleState();
+}
+
+class _VoiceNoteBubbleState extends State<VoiceNoteBubble> {
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  Duration _duration = const Duration(seconds: 4);
+  Duration _position = Duration.zero;
+  StreamSubscription? _posSub;
+  StreamSubscription? _durSub;
+  StreamSubscription? _compSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _posSub = AudioService.player.onPositionChanged.listen((pos) {
+      if (mounted && _isPlaying) {
+        setState(() => _position = pos);
+      }
+    });
+
+    _durSub = AudioService.player.onDurationChanged.listen((dur) {
+      if (mounted && _isPlaying && dur.inMilliseconds > 0) {
+        setState(() => _duration = dur);
+      }
+    });
+
+    _compSub = AudioService.player.onPlayerComplete.listen((_) {
+      if (mounted && _isPlaying) {
+        setState(() {
+          _isPlaying = false;
+          _position = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _compSub?.cancel();
+    super.dispose();
+  }
+
+  String _formatTime(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _togglePlay() async {
+    if (_isPlaying) {
+      await AudioService.stopAudio();
+      if (mounted) setState(() => _isPlaying = false);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      String? audioToPlay = widget.audioSource;
+      if (audioToPlay == null || audioToPlay.isEmpty) {
+        audioToPlay = await ChatApi.speakText(widget.text);
+      }
+
+      if (audioToPlay != null && mounted) {
+        setState(() {
+          _isLoading = false;
+          _isPlaying = true;
+        });
+        await AudioService.playAudio(audioToPlay);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isPlaying = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = widget.isUser ? AppColors.background : AppColors.primary;
+    final inactiveColor = widget.isUser ? Colors.black26 : AppColors.surfaceLight;
+    final textColor = widget.isUser ? Colors.black54 : AppColors.textMuted;
+
+    final maxMs = _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1.0;
+    final curMs = _position.inMilliseconds.toDouble().clamp(0.0, maxMs);
+
+    return SizedBox(
+      width: 230,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Play/Pause icon
+              GestureDetector(
+                onTap: _togglePlay,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: widget.isUser ? Colors.black.withValues(alpha: 0.15) : AppColors.background,
+                    shape: BoxShape.circle,
+                  ),
+                  child: _isLoading
+                      ? Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: activeColor),
+                          ),
+                        )
+                      : Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: activeColor,
+                          size: 24,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 4),
+
+              // Waveform slider
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3.0,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                    activeTrackColor: activeColor,
+                    inactiveTrackColor: inactiveColor,
+                    thumbColor: activeColor,
+                  ),
+                  child: Slider(
+                    min: 0.0,
+                    max: maxMs,
+                    value: curMs,
+                    onChanged: (val) {
+                      if (_isPlaying) {
+                        AudioService.player.seek(Duration(milliseconds: val.toInt()));
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 44, right: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatTime(_isPlaying ? _position : _duration),
+                  style: TextStyle(color: textColor, fontSize: 11),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.timestamp,
+                      style: TextStyle(color: textColor, fontSize: 11),
+                    ),
+                    if (widget.isUser) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.done_all, color: Colors.blue.shade600, size: 14),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ChatScreen extends StatefulWidget {
   final String companionId;
 
@@ -104,6 +307,8 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  static final Map<String, List<Map<String, dynamic>>> _memoryCache = {};
+
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
@@ -111,9 +316,9 @@ class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> messages = [];
   bool isTyping = false;
   bool isRecording = false;
+  bool _initialLoading = true;
   Timer? _recordTimer;
   int _recordSeconds = 0;
-  String? _currentlyPlayingId;
   String? selectedImageUri;
   String? selectedImageBase64;
   Map<String, dynamic>? replyToMessage;
@@ -122,6 +327,13 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _textController.addListener(_onTextChanged);
+
+    // Instant zero-lag cache restore
+    if (_memoryCache.containsKey(widget.companionId)) {
+      messages = List.from(_memoryCache[widget.companionId]!);
+      _initialLoading = false;
+    }
+
     _loadHistory();
   }
 
@@ -161,23 +373,55 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadHistory() async {
+    // If not in memory, restore from persistent storage immediately
+    if (messages.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString('chat_cache_${widget.companionId}');
+        if (cached != null && messages.isEmpty && mounted) {
+          final List list = jsonDecode(cached);
+          setState(() {
+            messages = list.map((e) => Map<String, dynamic>.from(e)).toList();
+            _initialLoading = false;
+          });
+          _scrollToBottom();
+        }
+      } catch (_) {}
+    }
+
     try {
       final history = await ChatApi.getChatHistory(widget.companionId);
       if (mounted) {
-        setState(() {
-          messages = history.map((msg) => {
+        final parsed = history.map((msg) {
+          final rawContent = (msg['content'] as String?) ?? '';
+          final isVoice = rawContent.startsWith('[voice]:');
+          final cleanContent = isVoice ? rawContent.substring(8).trim() : rawContent;
+
+          return {
             'id': msg['id'],
-            'text': msg['content'],
+            'text': cleanContent,
             'isUser': msg['sender'] == 'USER',
+            'isVoice': isVoice,
             'timestamp': _formatTime(DateTime.parse(msg['createdAt']).toLocal()),
             'replyToId': msg['replyToId'],
             if (msg['image'] != null) 'imageUri': msg['image'],
-          }).toList();
+          };
+        }).toList();
+
+        setState(() {
+          messages = parsed;
+          _initialLoading = false;
         });
+        _memoryCache[widget.companionId] = List.from(parsed);
         _scrollToBottom();
+
+        // Save to SharedPreferences for instant load next time
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('chat_cache_${widget.companionId}', jsonEncode(parsed));
       }
     } catch (e) {
       debugPrint('Error loading history: $e');
+      if (mounted) setState(() => _initialLoading = false);
     }
   }
 
@@ -252,9 +496,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _handleSendAudio(String base64Audio) async {
     final userMessage = {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'text': '🎙️ Voice note',
+      'text': 'Voice note',
       'isUser': true,
       'isVoice': true,
+      'audioData': base64Audio,
       'timestamp': _formatTime(DateTime.now()),
     };
 
@@ -274,10 +519,15 @@ class _ChatScreenState extends State<ChatScreen> {
         wantAudio: true,
       );
 
+      final isVoiceReply = response['isVoice'] == true || response['audioData'] != null;
+      final rawReply = response['message']?['content'] ?? '...';
+      final cleanReply = rawReply.startsWith('[voice]:') ? rawReply.substring(8).trim() : rawReply;
+
       final aiMessage = {
         'id': response['message']?['id'] ?? (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-        'text': response['message']?['content'] ?? '...',
+        'text': cleanReply,
         'isUser': false,
+        'isVoice': isVoiceReply,
         'audioData': response['audioData'],
         'timestamp': _formatTime(DateTime.now()),
       };
@@ -286,12 +536,12 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           messages.add(aiMessage);
         });
+        _memoryCache[widget.companionId] = List.from(messages);
         _scrollToBottom();
-      }
 
-      // Automatically play Mira's voice reply!
-      if (response['audioData'] != null) {
-        await _playVoice(aiMessage['id'], response['audioData'], aiMessage['text']);
+        // Update persistent cache
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('chat_cache_${widget.companionId}', jsonEncode(messages));
       }
     } catch (e) {
       if (mounted) {
@@ -300,6 +550,7 @@ class _ChatScreenState extends State<ChatScreen> {
             'id': (DateTime.now().millisecondsSinceEpoch + 1).toString(),
             'text': 'Sorry... I could not process your voice note right now 🥺',
             'isUser': false,
+            'isVoice': false,
             'timestamp': _formatTime(DateTime.now()),
           });
         });
@@ -311,41 +562,6 @@ class _ChatScreenState extends State<ChatScreen> {
           isTyping = false;
         });
       }
-    }
-  }
-
-  Future<void> _playVoice(String messageId, String? audioData, String text) async {
-    if (_currentlyPlayingId == messageId) {
-      await AudioService.stopAudio();
-      if (mounted) setState(() => _currentlyPlayingId = null);
-      return;
-    }
-
-    if (mounted) setState(() => _currentlyPlayingId = messageId);
-
-    try {
-      if (audioData != null && audioData.isNotEmpty) {
-        await AudioService.playAudio(audioData);
-      } else {
-        // Request on-demand TTS voice
-        final generatedAudio = await ChatApi.speakText(text);
-        if (generatedAudio != null) {
-          final idx = messages.indexWhere((m) => m['id'] == messageId);
-          if (idx != -1) {
-            messages[idx]['audioData'] = generatedAudio;
-          }
-          await AudioService.playAudio(generatedAudio);
-        }
-      }
-
-      AudioService.player.onPlayerComplete.listen((_) {
-        if (mounted && _currentlyPlayingId == messageId) {
-          setState(() => _currentlyPlayingId = null);
-        }
-      });
-    } catch (e) {
-      debugPrint('Playback error: $e');
-      if (mounted) setState(() => _currentlyPlayingId = null);
     }
   }
 
@@ -361,6 +577,7 @@ class _ChatScreenState extends State<ChatScreen> {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'text': text,
       'isUser': true,
+      'isVoice': false,
       'timestamp': _formatTime(DateTime.now()),
       'replyToId': currentReplyToId,
       if (localImageUri != null) 'imageUri': localImageUri,
@@ -386,10 +603,15 @@ class _ChatScreenState extends State<ChatScreen> {
         imageBase64: imageToUpload,
       );
       
+      final isVoiceReply = response['isVoice'] == true || response['audioData'] != null;
+      final rawReply = response['message']?['content'] ?? '...';
+      final cleanReply = rawReply.startsWith('[voice]:') ? rawReply.substring(8).trim() : rawReply;
+
       final aiMessage = {
         'id': response['message']?['id'] ?? (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-        'text': response['message']?['content'] ?? '...',
+        'text': cleanReply,
         'isUser': false,
+        'isVoice': isVoiceReply,
         'audioData': response['audioData'],
         'timestamp': _formatTime(DateTime.now()),
       };
@@ -398,7 +620,12 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           messages.add(aiMessage);
         });
+        _memoryCache[widget.companionId] = List.from(messages);
         _scrollToBottom();
+
+        // Update persistent cache
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('chat_cache_${widget.companionId}', jsonEncode(messages));
       }
     } catch (e) {
       if (mounted) {
@@ -407,6 +634,7 @@ class _ChatScreenState extends State<ChatScreen> {
             'id': (DateTime.now().millisecondsSinceEpoch + 1).toString(),
             'text': 'Sorry... I am having trouble connecting right now 🥺',
             'isUser': false,
+            'isVoice': false,
             'timestamp': _formatTime(DateTime.now()),
           });
         });
@@ -470,175 +698,138 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(20),
-              itemCount: messages.length + (isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == messages.length && isTyping) {
-                  return const TypingIndicator();
-                }
+            child: _initialLoading && messages.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 1.5),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(20),
+                    itemCount: messages.length + (isTyping ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == messages.length && isTyping) {
+                        return const TypingIndicator();
+                      }
 
-                final msg = messages[index];
-                final isUser = msg['isUser'] as bool;
-                final isVoice = msg['isVoice'] == true;
-                
-                String? repliedText;
-                if (msg['replyToId'] != null) {
-                  final repliedMsg = messages.cast<Map<String,dynamic>?>().firstWhere(
-                    (m) => m?['id'] == msg['replyToId'],
-                    orElse: () => null,
-                  );
-                  if (repliedMsg != null) repliedText = repliedMsg['text'] as String?;
-                }
-                
-                return Dismissible(
-                  key: Key(msg['id']),
-                  direction: isUser ? DismissDirection.endToStart : DismissDirection.startToEnd,
-                  confirmDismiss: (direction) async {
-                    setState(() {
-                      replyToMessage = msg;
-                    });
-                    return false;
-                  },
-                  background: Container(
-                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: const Icon(Icons.reply, color: AppColors.primary),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Align(
-                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isUser ? AppColors.primary : AppColors.surface,
-                          border: Border.all(
-                            color: isUser ? AppColors.primary : AppColors.glassBorder,
-                          ),
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(16),
-                            topRight: const Radius.circular(16),
-                            bottomLeft: Radius.circular(isUser ? 16 : 4),
-                            bottomRight: Radius.circular(isUser ? 4 : 16),
-                          ),
+                      final msg = messages[index];
+                      final isUser = msg['isUser'] as bool;
+                      final isVoice = msg['isVoice'] == true;
+                      
+                      String? repliedText;
+                      if (msg['replyToId'] != null) {
+                        final repliedMsg = messages.cast<Map<String,dynamic>?>().firstWhere(
+                          (m) => m?['id'] == msg['replyToId'],
+                          orElse: () => null,
+                        );
+                        if (repliedMsg != null) repliedText = repliedMsg['text'] as String?;
+                      }
+                      
+                      return Dismissible(
+                        key: Key(msg['id']),
+                        direction: isUser ? DismissDirection.endToStart : DismissDirection.startToEnd,
+                        confirmDismiss: (direction) async {
+                          setState(() {
+                            replyToMessage = msg;
+                          });
+                          return false;
+                        },
+                        background: Container(
+                          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: const Icon(Icons.reply, color: AppColors.primary),
                         ),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.8,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (repliedText != null && repliedText.isNotEmpty)
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: const Border(left: BorderSide(color: AppColors.textMuted, width: 3)),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          child: Align(
+                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              padding: isVoice 
+                                  ? const EdgeInsets.all(10)
+                                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isUser ? AppColors.primary : AppColors.surface,
+                                border: Border.all(
+                                  color: isUser ? AppColors.primary : AppColors.glassBorder,
                                 ),
-                                child: Text(
-                                  repliedText,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: isUser ? AppColors.background.withValues(alpha: 0.8) : AppColors.textMuted,
-                                    fontSize: 12,
-                                  ),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                  bottomRight: Radius.circular(isUser ? 4 : 16),
                                 ),
                               ),
-                            if (msg['imageUri'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: _buildImage(msg['imageUri']),
-                                ),
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.8,
                               ),
-                            if (isVoice)
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: 4),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.mic, color: Colors.black87, size: 18),
-                                    SizedBox(width: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (repliedText != null && repliedText.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: const Border(left: BorderSide(color: AppColors.textMuted, width: 3)),
+                                      ),
+                                      child: Text(
+                                        repliedText,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: isUser ? AppColors.background.withValues(alpha: 0.8) : AppColors.textMuted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  if (msg['imageUri'] != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: _buildImage(msg['imageUri']),
+                                      ),
+                                    ),
+
+                                  // If message is a voice note, render WhatsApp-style Voice Note Player Bubble
+                                  if (isVoice)
+                                    VoiceNoteBubble(
+                                      messageId: msg['id'],
+                                      audioSource: msg['audioData'],
+                                      text: msg['text'] ?? '',
+                                      isUser: isUser,
+                                      timestamp: msg['timestamp'],
+                                    )
+                                  else ...[
+                                    if (msg['text'] != null && (msg['text'] as String).isNotEmpty)
+                                      Text(
+                                        msg['text'],
+                                        style: TextStyle(
+                                          color: isUser ? AppColors.background : AppColors.text,
+                                          fontSize: 15,
+                                          height: 1.4,
+                                          fontWeight: isUser ? FontWeight.w500 : FontWeight.w300,
+                                        ),
+                                      ),
+                                    const SizedBox(height: 8),
                                     Text(
-                                      'Voice note',
-                                      style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                                      msg['timestamp'],
+                                      style: TextStyle(
+                                        color: isUser ? Colors.black54 : AppColors.textMuted,
+                                        fontSize: 10,
+                                        letterSpacing: 1,
+                                      ),
                                     ),
                                   ],
-                                ),
-                              )
-                            else if (msg['text'] != null && (msg['text'] as String).isNotEmpty)
-                              Text(
-                                msg['text'],
-                                style: TextStyle(
-                                  color: isUser ? AppColors.background : AppColors.text,
-                                  fontSize: 15,
-                                  height: 1.4,
-                                  fontWeight: isUser ? FontWeight.w500 : FontWeight.w300,
-                                ),
-                              ),
-
-                            // Audio Playback button on Mira's messages
-                            if (!isUser && msg['text'] != null && (msg['text'] as String).isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: InkWell(
-                                  onTap: () => _playVoice(msg['id'], msg['audioData'], msg['text']),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.background,
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: AppColors.glassBorder),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          _currentlyPlayingId == msg['id']
-                                              ? Icons.pause_circle_filled
-                                              : Icons.volume_up_rounded,
-                                          color: AppColors.primary,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          _currentlyPlayingId == msg['id'] ? 'Playing...' : 'Listen',
-                                          style: const TextStyle(
-                                            color: AppColors.primary,
-                                            fontSize: 11,
-                                            letterSpacing: 1,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                            const SizedBox(height: 8),
-                            Text(
-                              msg['timestamp'],
-                              style: TextStyle(
-                                color: isUser ? Colors.black54 : AppColors.textMuted,
-                                fontSize: 10,
-                                letterSpacing: 1,
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
           if (replyToMessage != null)
             Container(

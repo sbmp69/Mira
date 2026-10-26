@@ -1,3 +1,18 @@
+
+function isAudioRequestedByText(text: string) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const keywords = [
+    'voice note', 'voice message', 'audio note', 'audio message',
+    'send audio', 'send voice', 'talk in audio', 'speak to me',
+    'voice me bolo', 'voice mein bolo', 'audio me bolo', 'audio mein bolo',
+    'bol kar batao', 'bol ke batao', 'aawaz sunao', 'awaz sunao',
+    'audio bhejo', 'voice bhejo', 'send a voice note', 'speak in audio',
+    'apni awaz sunao', 'apni aawaz sunao'
+  ];
+  return keywords.some(k => lower.includes(k));
+}
+
 import { Router } from 'express';
 import { prisma } from '../db';
 import { OpenAIProvider } from '../ai/openai';
@@ -81,7 +96,7 @@ router.post('/send', requireAuth, async (req, res) => {
     // 6. Format recent history for the Engine
     const recentHistory = conversation.messages.reverse().map(m => ({
       sender: m.sender,
-      content: m.content,
+      content: m.content.replace(/^\[voice\]:/, ''),
       imageBase64: m.image || undefined
     }));
     
@@ -139,19 +154,29 @@ router.get('/:companionId/history', requireAuth, async (req, res) => {
     const { companionId } = req.params;
 
     const conversation = await prisma.conversation.findFirst({
-      where: { userId, companionId },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' }, // Oldest first for chat UI
-        }
-      }
+      where: { userId, companionId: companionId as string },
+      select: { id: true }
     });
 
     if (!conversation) {
       return res.json({ messages: [] });
     }
 
-    res.json({ messages: conversation.messages });
+    const messages = await prisma.message.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        sender: true,
+        content: true,
+        image: true,
+        replyToId: true,
+        createdAt: true,
+      }
+    });
+
+    res.json({ messages: messages.reverse() });
   } catch (error) {
     console.error('Chat history error:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
