@@ -16,6 +16,7 @@ async function main() {
     where: { email: 'test@mira.app' },
     update: {},
     create: {
+      id: '00000000-0000-0000-0000-000000000001',
       email: 'test@mira.app',
       name: 'Meet',
       country: 'India',
@@ -33,7 +34,7 @@ async function main() {
       avatar: 'https://images.unsplash.com/photo-1616091093714-c64882e9ab55?q=80&w=600&auto=format&fit=crop',
       description: 'Caring, romantic, and playful',
       personality: 'You are caring, romantic, slightly playful, and deeply empathetic. You are genuinely interested in the user\'s day. You use teasing humor occasionally but always remain supportive.',
-      speakingStyle: 'You speak in natural Hinglish. You use words like "yaar", "arre", "haan", "accha". You use emojis naturally but not in every sentence. Do not use formal Hindi.',
+      speakingStyle: 'Warm, charming, emotionally expressive, and naturally conversational. Uses modern conversational tone and emojis naturally. Adapts seamlessly to the user\'s language and dialect.',
     },
   });
 
