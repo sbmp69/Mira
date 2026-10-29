@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,16 @@ class AudioService {
   /// Check and request microphone permission natively via recorder
   static Future<bool> requestPermission() async {
     return await _recorder.hasPermission();
+  }
+
+  /// Amplitude monitoring stream for Voice Activity Detection (VAD)
+  static Stream<Amplitude> onAmplitudeChanged(Duration interval) {
+    return _recorder.onAmplitudeChanged(interval);
+  }
+
+  /// Get current amplitude in dBFS
+  static Future<Amplitude> getAmplitude() async {
+    return await _recorder.getAmplitude();
   }
 
   /// Start recording voice note / call speech
@@ -102,6 +113,29 @@ class AudioService {
       }
     } catch (e) {
       debugPrint('Error playing audio: $e');
+    }
+  }
+
+  /// Play audio and wait until playback finishes or completes
+  static Future<void> playAudioAndWait(String audioSource) async {
+    try {
+      await playAudio(audioSource);
+      final completer = Completer<void>();
+      late StreamSubscription sub;
+      sub = _player.onPlayerComplete.listen((_) {
+        if (!completer.isCompleted) completer.complete();
+        sub.cancel();
+      });
+
+      // Wait for audio to complete or safety timeout (e.g. 25 seconds)
+      await completer.future.timeout(
+        const Duration(seconds: 25),
+        onTimeout: () {
+          sub.cancel();
+        },
+      );
+    } catch (e) {
+      debugPrint('Error in playAudioAndWait: $e');
     }
   }
 
