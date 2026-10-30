@@ -11,6 +11,7 @@ import 'screens/home_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/call_screen.dart';
 import 'screens/profile_screen.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,8 @@ Future<void> main() async {
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+  // Initialize proactive check-in notifications (3 times daily, multi-language)
+  await NotificationService().init();
   runApp(const MiraApp());
 }
 
